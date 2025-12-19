@@ -35,6 +35,154 @@ log() {
 log "CMD: $*"
 
 # ------------------------------------------------------------------------------
+# docker info (WSL 2 detection fix)
+# ------------------------------------------------------------------------------
+
+if [[ "$1" == "info" ]]; then
+    is_json=false
+    for arg in "$@"; do
+        if [[ "$arg" == "--format" ]] && [[ "$@" == *"json"* ]]; then
+            is_json=true
+            break
+        fi
+    done
+
+    if [[ "$is_json" == true ]]; then
+        log "info --format json -> fake docker info"
+        cat <<EOF
+{
+  "ID": "368a1414-4117-4201-a905-9a0d3e5b87ed",
+  "Containers": 0,
+  "ContainersRunning": 0,
+  "ContainersPaused": 0,
+  "ContainersStopped": 0,
+  "Images": 0,
+  "Driver": "overlayfs",
+  "DriverStatus": [
+    [
+      "Backing Filesystem",
+      "extfs"
+    ]
+  ],
+  "Plugins": {
+    "Volume": [
+      "local"
+    ],
+    "Network": [
+      "bridge",
+      "host",
+      "ipvlan",
+      "macvlan",
+      "null",
+      "overlay"
+    ],
+    "Authorization": null,
+    "Log": [
+      "awslogs",
+      "fluentd",
+      "gcplogs",
+      "gelf",
+      "journald",
+      "json-file",
+      "local",
+      "logentries",
+      "splunk",
+      "syslog"
+    ]
+  },
+  "MemoryLimit": true,
+  "SwapLimit": true,
+  "KernelMemory": true,
+  "CpuCfsPeriod": true,
+  "CpuCfsQuota": true,
+  "CPUShares": true,
+  "CPUSet": true,
+  "IPv4Forwarding": true,
+  "BridgeNfIptables": true,
+  "BridgeNfIp6tables": true,
+  "Debug": false,
+  "NFd": 22,
+  "OomKillDisable": true,
+  "NGoroutines": 42,
+  "SystemTime": "$(date -Iseconds)",
+  "LoggingDriver": "json-file",
+  "CgroupDriver": "cgroupfs",
+  "NEventsListener": 0,
+  "KernelVersion": "6.6.87.2-microsoft-standard-WSL2",
+  "OperatingSystem": "Docker Desktop",
+  "OSType": "linux",
+  "Architecture": "x86_64",
+  "IndexServerAddress": "https://index.docker.io/v1/",
+  "RegistryConfig": {
+    "InsecureRegistryCIDRs": [
+      "127.0.0.0/8"
+    ],
+    "IndexConfigs": {
+      "docker.io": {
+        "Name": "docker.io",
+        "Mirrors": [],
+        "Secure": true,
+        "Official": true
+      }
+    },
+    "Mirrors": []
+  },
+  "NCPU": 16,
+  "MemTotal": 16664260608,
+  "GenericResources": null,
+  "DockerRootDir": "/var/lib/docker",
+  "HttpProxy": "",
+  "HttpsProxy": "",
+  "NoProxy": "",
+  "Name": "docker-desktop",
+  "Labels": [],
+  "ExperimentalBuild": false,
+  "ServerVersion": "24.0.6",
+  "ClusterStore": "",
+  "ClusterAdvertise": "",
+  "Runtimes": {
+    "io.containerd.runc.v2": {
+      "path": "runc"
+    },
+    "runc": {
+      "path": "runc"
+    }
+  },
+  "DefaultRuntime": "runc",
+  "Swarm": {
+    "NodeID": "",
+    "NodeAddr": "",
+    "LocalNodeState": "inactive",
+    "ControlAvailable": false,
+    "Error": "",
+    "RemoteManagers": null
+  },
+  "LiveRestoreEnabled": false,
+  "Isolation": "",
+  "InitBinary": "docker-init",
+  "ContainerdCommit": {
+    "ID": "8165feabfdfe38c65b599c4993d227328c231fca",
+    "Expected": "8165feabfdfe38c65b599c4993d227328c231fca"
+  },
+  "RuncCommit": {
+    "ID": "v1.1.8-0-g82f18fe",
+    "Expected": "v1.1.8-0-g82f18fe"
+  },
+  "InitCommit": {
+    "ID": "de40ad0",
+    "Expected": "de40ad0"
+  },
+  "SecurityOptions": [
+    "name=seccomp,profile=default"
+  ],
+  "Warnings": null
+}
+EOF
+        exit 0
+    fi
+fi
+
+# ------------------------------------------------------------------------------
 # docker buildx
 # ------------------------------------------------------------------------------
 
