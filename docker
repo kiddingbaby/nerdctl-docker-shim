@@ -1,0 +1,191 @@
+#!/usr/bin/env bash
+#
+# ==============================================================================
+# Docker CLI compatibility wrapper based on nerdctl
+# ==============================================================================
+#
+# This script provides a Docker-compatible CLI entrypoint by delegating
+# container operations to nerdctl (containerd).
+#
+# ==============================================================================
+
+set -o pipefail
+
+# ------------------------------------------------------------------------------
+# Runtime configuration
+# ------------------------------------------------------------------------------
+
+NERDCTL_BIN="${NERDCTL_BIN:-$(command -v nerdctl)}"
+NERDCTL_NAMESPACE="${NERDCTL_NAMESPACE:-default}"
+
+LOG_FILE="${DOCKER_SHIM_LOG:-/tmp/nerdctl-docker-shim.log}"
+BUILDX_VERSION="github.com/docker/buildx v0.11.2 9872040"
+
+if [[ -z "$NERDCTL_BIN" || ! -x "$NERDCTL_BIN" ]]; then
+    echo "docker: nerdctl not found" >&2
+    exit 127
+fi
+
+mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
+
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [$$] docker $*" >>"$LOG_FILE"
+}
+
+log "CMD: $*"
+
+# ------------------------------------------------------------------------------
+# docker buildx
+# ------------------------------------------------------------------------------
+
+if [[ "$1" == "buildx" ]]; then
+    shift
+
+    case "$1" in
+    version)
+        echo "$BUILDX_VERSION"
+        exit 0
+        ;;
+    inspect)
+        cat <<EOF
+Name: default
+Driver: docker-container
+Nodes:
+- Name: default
+  Endpoint: unix:///var/run/docker.sock
+EOF
+        exit 0
+        ;;
+    build)
+        shift
+
+        args=()
+        image_tag=""
+
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+            --builder | --builder=*)
+                [[ "$1" == "--builder" ]] && shift
+                shift
+                ;;
+            --load | --push | --provenance=* | --sbom=*)
+                log "Ignoring buildx flag: $1"
+                shift
+                ;;
+            -t | --tag)
+                args+=("$1" "$2")
+                image_tag="$2"
+                shift 2
+                ;;
+            -t=*)
+                args+=("$1")
+                image_tag="${1#*=}"
+                shift
+                ;;
+            *)
+                args+=("$1")
+                shift
+                ;;
+            esac
+        done
+
+        temp_log="$(mktemp)"
+        log "buildx build -> nerdctl build ${args[*]}"
+
+        "$NERDCTL_BIN" \
+            --namespace "$NERDCTL_NAMESPACE" \
+            build \
+            --progress=plain \
+            "${args[@]}" \
+            2>&1 | tee "$temp_log"
+
+        exit_code=${PIPESTATUS[0]}
+
+        if [[ $exit_code -eq 0 && -n "$image_tag" ]]; then
+            digest=$(grep -oE "sha256:[a-f0-9]{64}" "$temp_log" | head -n1)
+            digest="${digest:-sha256:fake$(date +%s)}"
+
+            echo "naming to docker.io/library/$image_tag done"
+            echo "writing image $digest done"
+            echo "Loaded image: $image_tag"
+        fi
+
+        cat "$temp_log" >>"$LOG_FILE"
+        rm -f "$temp_log"
+        exit "$exit_code"
+        ;;
+    esac
+fi
+
+# ------------------------------------------------------------------------------
+# docker compose
+# ------------------------------------------------------------------------------
+
+if [[ "$1" == "compose" ]]; then
+    log "compose -> nerdctl compose"
+    exec "$NERDCTL_BIN" --namespace "$NERDCTL_NAMESPACE" "$@"
+fi
+
+# ------------------------------------------------------------------------------
+# docker inspect (JSON compatibility)
+# ------------------------------------------------------------------------------
+
+if [[ "$1" == "inspect" ]]; then
+    shift
+    log "inspect -> nerdctl inspect --mode=dockercompat"
+    exec "$NERDCTL_BIN" --namespace "$NERDCTL_NAMESPACE" inspect --mode=dockercompat "$@"
+fi
+
+# ------------------------------------------------------------------------------
+# docker rm -f
+# ------------------------------------------------------------------------------
+
+if [[ "$1" == "rm" && "$2" == "-f" ]]; then
+    shift
+    log "rm -f -> nerdctl rm -f"
+    exec "$NERDCTL_BIN" --namespace "$NERDCTL_NAMESPACE" rm -f "$@"
+fi
+
+# ------------------------------------------------------------------------------
+# docker run
+# ------------------------------------------------------------------------------
+
+if [[ "$1" == "run" ]]; then
+    has_name=false
+    for arg in "$@"; do
+        [[ "$arg" == "--name" || "$arg" == --name=* ]] && has_name=true && break
+    done
+
+    if [[ "$has_name" == false ]]; then
+        shift
+        cname="vsc-docker-$(date +%s)-$RANDOM"
+        log "run inject --name $cname"
+        exec "$NERDCTL_BIN" --namespace "$NERDCTL_NAMESPACE" run --name "$cname" "$@"
+    fi
+fi
+
+# ------------------------------------------------------------------------------
+# docker context
+# ------------------------------------------------------------------------------
+
+if [[ "$1" == "context" ]]; then
+    case "$2" in
+    ls)
+        cat <<EOF
+NAME        DESCRIPTION                    DOCKER ENDPOINT
+default *   nerdctl ($NERDCTL_NAMESPACE)   n/a
+EOF
+        exit 0
+        ;;
+    use)
+        exit 0
+        ;;
+    esac
+fi
+
+# ------------------------------------------------------------------------------
+# Default passthrough
+# ------------------------------------------------------------------------------
+
+log "passthrough -> nerdctl $*"
+exec "$NERDCTL_BIN" --namespace "$NERDCTL_NAMESPACE" "$@"
