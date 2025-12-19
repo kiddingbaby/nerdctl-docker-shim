@@ -80,5 +80,14 @@ echo -e "\n[TEST] Cleanup"
 "$SHIM_BIN" rm -f "$CONTAINER_ID"
 echo "✅ Cleanup successful"
 
+# 6. Failure Propagation
+echo -e "\n[TEST] Failure Propagation"
+if "$SHIM_BIN" run non-existent-image-$(date +%s) 2>/dev/null; then
+    echo "❌ Failed: Should have returned error code for non-existent image"
+    exit 1
+else
+    echo "✅ Success: Correctly propagated error code"
+fi
+
 echo -e "\n================================================================"
 echo "Integration tests passed!"

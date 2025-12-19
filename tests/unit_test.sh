@@ -85,6 +85,21 @@ run_test "context ls" "$SHIM_BIN context ls" "default \*   nerdctl (test-ns)"
 # 8. passthrough
 run_test "passthrough images" "$SHIM_BIN images" "MOCK_NERDCTL_CALLED_WITH: --namespace test-ns images"
 
+# 9. compose
+run_test "compose passthrough" "$SHIM_BIN compose up -d" "MOCK_NERDCTL_CALLED_WITH: --namespace test-ns compose up -d"
+
+# 10. context use (should exit 0 silently)
+# We check that it DOES NOT call nerdctl (output should be empty or just not contain MOCK_NERDCTL)
+# Actually, the shim exits 0 directly.
+if "$SHIM_BIN" context use default >/dev/null; then
+    echo "----------------------------------------------------------------"
+    echo "TEST: context use"
+    echo "✅ PASS (Exit code 0)"
+else
+    echo "❌ FAIL: context use failed"
+    exit 1
+fi
+
 echo "================================================================"
 echo "All unit tests passed!"
 
