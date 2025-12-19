@@ -1,5 +1,7 @@
 # Tests
 
+[中文版](README_zh-CN.md)
+
 This directory contains tests for `nerdctl-docker-shim`.
 
 ## Unit Tests (`unit_test.sh`)

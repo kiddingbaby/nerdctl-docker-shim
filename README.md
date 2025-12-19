@@ -1,5 +1,7 @@
 # nerdctl-docker-shim
 
+[中文版](README_zh-CN.md)
+
 A Docker CLI compatibility wrapper script based on `nerdctl`.
 
 This script aims to provide a seamless `nerdctl` (containerd) experience for tools that are accustomed to using the Docker CLI or depend on it (such as VS Code Dev Containers, JetBrains IDEs, etc.). It achieves compatibility by intercepting `docker` commands and converting them into corresponding `nerdctl` commands.
