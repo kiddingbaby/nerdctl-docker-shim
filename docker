@@ -305,10 +305,41 @@ if [[ "$1" == "run" ]]; then
     done
 
     if [[ "$has_name" == false ]]; then
-        shift
-        cname="vsc-docker-$(date +%s)-$RANDOM"
-        log "run inject --name $cname"
-        exec "$NERDCTL_BIN" --namespace "$NERDCTL_NAMESPACE" run --name "$cname" "$@"
+    shift
+    cname="vsc-docker-$(date +%s)-$RANDOM"
+    log "run inject --name $cname"
+
+    # Filter out any --mount entries with an empty source (e.g., source=,)
+    new_args=()
+    prev_is_mount=false
+    for a in "$@"; do
+      if [[ "$a" == "--mount" ]]; then
+        prev_is_mount=true
+        continue
+      fi
+      if [[ "$a" == --mount=* ]]; then
+        mount_spec="${a#--mount=}"
+        if [[ "$mount_spec" == *"source=,"* ]]; then
+          log "Dropping empty-source mount: $a"
+          continue
+        fi
+        new_args+=("$a")
+        continue
+      fi
+      if [[ "$prev_is_mount" == true ]]; then
+        mount_spec="$a"
+        prev_is_mount=false
+        if [[ "$mount_spec" == *"source=,"* ]]; then
+          log "Dropping empty-source mount: --mount $mount_spec"
+          continue
+        fi
+        new_args+=("--mount" "$mount_spec")
+        continue
+      fi
+      new_args+=("$a")
+    done
+
+    exec "$NERDCTL_BIN" --namespace "$NERDCTL_NAMESPACE" run --name "$cname" "${new_args[@]}"
     fi
 fi
 
